@@ -95,11 +95,37 @@ public class LaunchFragment extends Fragment {
         WebSettings ws = wv.getSettings();
         ws.setJavaScriptEnabled(true);
         ws.setDomStorageEnabled(true);
+        ws.setLoadWithOverviewMode(true);
+        ws.setUseWideViewPort(true);
         if (desktopMode) {
             wv.getSettings().setUserAgentString("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
                     "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36");
         }
+        // 键盘弹出时自动调整布局（配合 manifest 的 adjustResize）
+        wv.setLayoutParams(new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         wv.setWebViewClient(new WebViewClient());
+        // 键盘弹出时，通过 WindowInsets 调整 WebView 底部留白，确保输入框可见。
+        wv.setOnApplyWindowInsetsListener((v, insets) -> {
+            if (android.os.Build.VERSION.SDK_INT >= 30) {
+                // API 30+：键盘/IME 的 inset 在 ime() 中
+                int ime = insets.getInsets(android.view.WindowInsets.Type.ime()).bottom;
+                if (ime > 0) {
+                    v.setPadding(0, 0, 0, ime);
+                } else {
+                    v.setPadding(0, 0, 0, 0);
+                }
+            } else {
+                // API 26-29：用 systemWindowInsetBottom 近似（含键盘）
+                int bottom = insets.getSystemWindowInsetBottom();
+                if (bottom > 0) {
+                    v.setPadding(0, 0, 0, bottom);
+                } else {
+                    v.setPadding(0, 0, 0, 0);
+                }
+            }
+            return insets;
+        });
     }
 
     /** 加载预览 URL（按当前内核分发） */
@@ -295,14 +321,23 @@ public class LaunchFragment extends Fragment {
         if (getActivity() instanceof MainActivity) {
             ((MainActivity) getActivity()).setBottomNavVisible(false);
         }
-        View decor = getActivity() != null ? getActivity().getWindow().getDecorView() : null;
-        if (decor != null) {
+        android.app.Activity act = getActivity();
+        if (act == null) return;
+        View decor = act.getWindow().getDecorView();
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            // Android 11+：使用 WindowInsetsController 隐藏导航栏，但保留状态栏
+            // （避免状态栏变黑/被遮挡）。
+            android.view.WindowInsetsController c = act.getWindow().getInsetsController();
+            if (c != null) {
+                c.hide(android.view.WindowInsets.Type.navigationBars());
+                c.setSystemBarsBehavior(
+                        android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+            }
+        } else {
+            // Android 10-：隐藏导航栏但保留状态栏
             decor.setSystemUiVisibility(
                     View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                            | View.SYSTEM_UI_FLAG_FULLSCREEN
                             | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                            | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                            | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
                             | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
         }
     }
@@ -314,6 +349,17 @@ public class LaunchFragment extends Fragment {
         statusText.setVisibility(View.VISIBLE);
         if (getActivity() instanceof MainActivity) {
             ((MainActivity) getActivity()).setBottomNavVisible(true);
+        }
+        android.app.Activity act = getActivity();
+        if (act == null) return;
+        View decor = act.getWindow().getDecorView();
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            android.view.WindowInsetsController c = act.getWindow().getInsetsController();
+            if (c != null) {
+                c.show(android.view.WindowInsets.Type.navigationBars());
+            }
+        } else {
+            decor.setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE);
         }
     }
 

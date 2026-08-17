@@ -13,8 +13,6 @@ import android.os.PowerManager;
 import android.provider.Settings;
 import android.view.LayoutInflater;
 import android.view.View;
-import android.view.Window;
-import android.view.WindowManager;
 import android.widget.CheckBox;
 import android.widget.Toast;
 
@@ -61,12 +59,8 @@ public class MainActivity extends AppCompatActivity {
 
         setContentView(R.layout.activity_main);
 
-        // 沉浸式全屏（隐藏状态栏 + 系统导航栏）
-        Window window = getWindow();
-        window.setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,
-                WindowManager.LayoutParams.FLAG_FULLSCREEN);
-        hideSystemUI();
-
+        // 不再强制全屏：保留状态栏，避免状态栏变黑/遮挡。
+        // 全屏预览由 LaunchFragment.enterFullscreen() 动态控制。
         requestPermissions();
         requestBatteryOptimization();
         maybeShowBackupReminder();
@@ -173,14 +167,11 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void hideSystemUI() {
+        // 正常显示状态栏与导航栏，不强制全屏（避免状态栏全黑）。
+        // 若需要全屏预览，由 LaunchFragment.enterFullscreen() 控制。
         View decor = getWindow().getDecorView();
         decor.setSystemUiVisibility(
-                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                        | View.SYSTEM_UI_FLAG_FULLSCREEN
-                        | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                        | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                        | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-                        | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
+                View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
     }
 
     // ================= 备份提醒 =================
@@ -259,6 +250,6 @@ public class MainActivity extends AppCompatActivity {
     @Override
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
-        if (hasFocus) hideSystemUI();
+        // 不再强制全屏 — 状态栏保持可见
     }
 }
