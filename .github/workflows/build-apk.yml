@@ -43,9 +43,3 @@ jobs:
         with:
           name: deepseekharness-arm64
           path: deepseekharness-arm64-*.apk
-
-      - name: Create Release
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: softprops/action-gh-release@v2
-        with:
-          files: deepseekharness-arm64-*.apk
