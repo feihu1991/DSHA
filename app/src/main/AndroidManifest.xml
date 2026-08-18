@@ -24,10 +24,12 @@
         android:usesCleartextTraffic="true"
         android:theme="@style/Theme.DeepseekHarness">
 
+        <!-- 注意：configChanges 不能包含 uiMode —— 否则系统切换日夜模式时 Activity 不重建，
+             AppCompat DayNight 主题不会跟随（外框永远停留在白色日间主题）。 -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode|keyboard"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|keyboard"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

@@ -166,14 +166,6 @@ public class MainActivity extends AppCompatActivity {
         }).start();
     }
 
-    private void hideSystemUI() {
-        // 正常显示状态栏与导航栏，不强制全屏（避免状态栏全黑）。
-        // 若需要全屏预览，由 LaunchFragment.enterFullscreen() 控制。
-        View decor = getWindow().getDecorView();
-        decor.setSystemUiVisibility(
-                View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
-    }
-
     // ================= 备份提醒 =================
     // 提醒频率分级：默认每 6 次 → 勾选"少提醒我"依次升级为 15 / 30 / 100 次
     private static final int[] REMIND_INTERVALS = {6, 15, 30, 100};
