@@ -172,9 +172,13 @@ public class WorkspaceFragment extends Fragment {
     }
 
     private void doRestore(Uri uri) {
-        Toast.makeText(requireContext(), "正在恢复，请稍候…", Toast.LENGTH_SHORT).show();
+        Toast.makeText(requireContext(), "正在停止服务并恢复，请稍候…", Toast.LENGTH_SHORT).show();
         new Thread(() -> {
             try {
+                // 0. 先停 Web UI：否则运行中的 DSH 会用旧内存状态覆盖恢复出来的配置
+                c.stopWeb();
+                try { Thread.sleep(2000); } catch (InterruptedException ignored) {}
+
                 File tmp = new File(c.getProot().getRootfsDir(), "root/.dsha-restore.tar.gz");
                 if (tmp.getParentFile() != null) tmp.getParentFile().mkdirs();
                 try (InputStream in = requireContext().getContentResolver().openInputStream(uri);
@@ -183,9 +187,9 @@ public class WorkspaceFragment extends Fragment {
                     int n;
                     while ((n = in.read(buf)) != -1) out.write(buf, 0, n);
                 }
-                // 解压到 /root（备份包可能含 .dsh、.local/share/opencode、usr 环境、<wd>、日志）
-                c.getProot().execChecked("cd /root && tar -xzf .dsha-restore.tar.gz 2>/dev/null; "
-                        + "(test -d .dsh || test -d usr || test -d .local || test -d " + c.getWorkdir() + ") "
+                // 解压到根目录（备份包成员是相对根路径：root/.dsh、root/...、usr、etc 等）
+                c.getProot().execChecked("cd / && tar -xzf /root/.dsha-restore.tar.gz 2>/dev/null; "
+                        + "(test -d /root/.dsh || test -d /usr || test -d /root/.local) "
                         + "&& echo OK || echo EMPTY");
                 //noinspection ResultOfMethodCallIgnored
                 tmp.delete();
@@ -241,7 +245,7 @@ public class WorkspaceFragment extends Fragment {
                 }
                 if (getActivity() == null) return;
                 getActivity().runOnUiThread(() ->
-                        Toast.makeText(requireContext(), "恢复完成（配置+凭据+对话 已全部恢复）",
+                        Toast.makeText(requireContext(), "恢复完成，请到「启动」页重新启动 Web UI",
                                 Toast.LENGTH_LONG).show());
             } catch (Exception e) {
                 if (getActivity() != null) {

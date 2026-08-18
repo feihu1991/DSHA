@@ -48,21 +48,22 @@ public final class BackupManager {
                     ? OPT_CONFIG | OPT_OPENCODE | OPT_WORKDIR | OPT_LOGS
                     : opts;
             // 1. rootfs 内打包（按选择拼 tar 参数）
+            // 注意：必须从根目录(/)打包，usr/etc 等在 / 下、配置等在 /root 下。
             String wd = c.getWorkdir();
             StringBuilder items = new StringBuilder();
-            if ((o & OPT_CONFIG) != 0) items.append(" .dsh");
-            if ((o & OPT_OPENCODE) != 0) items.append(" .local/share/opencode");
-            if ((o & OPT_ENV) != 0) items.append(" usr etc opt sbin bin lib lib64 var dsh-bin");
-            if ((o & OPT_WORKDIR) != 0) items.append(" ").append(wd);
-            if ((o & OPT_LOGS) != 0) items.append(" dsh-web.log");
+            if ((o & OPT_CONFIG) != 0) items.append(" root/.dsh");
+            if ((o & OPT_OPENCODE) != 0) items.append(" root/.local/share/opencode");
+            if ((o & OPT_ENV) != 0) items.append(" usr etc opt sbin bin lib lib64 var");
+            if ((o & OPT_WORKDIR) != 0) items.append(" root/").append(wd).append(" root/dsh-bin");
+            if ((o & OPT_LOGS) != 0) items.append(" root/dsh-web.log");
             if (items.length() == 0) return null;
 
-            // 环境备份时排除运行时虚拟目录与临时文件，避免自包含/超时
-            String excludes = " --exclude=./proc --exclude=./sys --exclude=./dev "
-                    + "--exclude=./tmp --exclude=./root/.dsha-backup.tar.gz --exclude=./run ";
-            String cmd = "cd /root && rm -f .dsha-backup.tar.gz && "
-                    + "tar -czf .dsha-backup.tar.gz" + excludes + items + " 2>/dev/null; "
-                    + "test -s .dsha-backup.tar.gz && echo OK || echo EMPTY";
+            // 排除运行时虚拟目录/临时文件与备份文件自身
+            String excludes = " --exclude=proc --exclude=sys --exclude=dev "
+                    + "--exclude=tmp --exclude=run --exclude=root/.dsha-backup.tar.gz ";
+            String cmd = "rm -f /root/.dsha-backup.tar.gz && cd / && "
+                    + "tar -czf /root/.dsha-backup.tar.gz" + excludes + items + " 2>/dev/null; "
+                    + "test -s /root/.dsha-backup.tar.gz && echo OK || echo EMPTY";
             String r = c.getProot().execAndRead(cmd);
             if (r == null || !r.trim().endsWith("OK")) return null;
             File tmp = new File(c.getProot().getRootfsDir(), "root/.dsha-backup.tar.gz");
