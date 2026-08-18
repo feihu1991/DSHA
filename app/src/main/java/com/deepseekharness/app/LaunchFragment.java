@@ -132,12 +132,10 @@ public class LaunchFragment extends Fragment {
             } else {
                 v.setPadding(0, 0, 0, 0);
             }
-            // 消费 IME inset，避免 WebView 内部再按键盘高度做一次滚动/缩放，
-            // 导致页面内容双重偏移。其余 insets 继续向下传播。
-            if (android.os.Build.VERSION.SDK_INT >= 30) {
-                return insets.consume(android.view.WindowInsets.Type.ime());
-            }
-            return insets.consumeSystemWindowInsets();
+            // 直接返回原始 insets，不消费：剩余 insets 继续在视图树中传播。
+            // （部分 compileSdk/AGP 组合下 WindowInsets.consume(int) 不可用，
+            //   且消费并非必需——setPadding 已把 IME 高度让给页面。）
+            return insets;
         });
         // 兜底：adjustResize 真正生效时窗口会缩小、WebView 高度会变化，
         // 此时页面视口已自然缩小，把手动 padding 清零，避免与新视口叠加。
