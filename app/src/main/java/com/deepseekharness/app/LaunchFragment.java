@@ -42,6 +42,66 @@ public class LaunchFragment extends Fragment {
     private boolean fullscreen = false;
     private boolean polling = false;
     private boolean previewBusy = false;
+    // Web 主题同步：网页(DSH 设置)切深/浅色时，状态栏/导航栏/窗口背景跟随
+    private final Handler themeHandler = new Handler(Looper.getMainLooper());
+    private final Runnable themePoller = new Runnable() {
+        @Override
+        public void run() {
+            applyWebTheme();
+            themeHandler.postDelayed(this, 1500);
+        }
+    };
+
+    /** 读取网页当前主题(DSH ui-theme 写在 html 内联 style.colorScheme)，同步系统栏 */
+    private void applyWebTheme() {
+        WebView wv = webView;
+        if (wv == null || getActivity() == null) return;
+        try {
+            wv.evaluateJavascript(
+                    "(function(){var cs=getComputedStyle(document.documentElement);" +
+                    "return JSON.stringify({dark:document.documentElement.style.colorScheme==='dark'," +
+                    "bg:(cs.getPropertyValue('--dsw-alias-bg-base')||'').trim()});})()",
+                    value -> {
+                        if (getActivity() == null || value == null || value.length() < 3) return;
+                        String v = value.trim();
+                        if (v.startsWith("\"") || v.startsWith("\'")) return; // 页面未就绪时返回字符串
+                        try {
+                            org.json.JSONObject j = new org.json.JSONObject(v);
+                            boolean dark = j.optBoolean("dark", false);
+                            String bg = j.optString("bg", "");
+                            applySystemBarTheme(dark, bg);
+                        } catch (Exception ignored) {
+                        }
+                    });
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 应用主题到系统栏：状态栏/导航栏背景色 + 图标深浅 */
+    private void applySystemBarTheme(boolean dark, String bg) {
+        android.app.Activity act = getActivity();
+        if (act == null) return;
+        int bgColor;
+        try {
+            bgColor = bg == null || bg.isEmpty() ? (dark ? 0xFF0F1115 : 0xFFFFFFFF)
+                    : android.graphics.Color.parseColor(bg);
+        } catch (Exception e) {
+            bgColor = dark ? 0xFF0F1115 : 0xFFFFFFFF;
+        }
+        act.getWindow().setStatusBarColor(bgColor);
+        act.getWindow().setNavigationBarColor(bgColor);
+        if (android.os.Build.VERSION.SDK_INT >= 23) {
+            View decor = act.getWindow().getDecorView();
+            int flags = decor.getSystemUiVisibility();
+            if (dark) flags &= ~View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+            else flags |= View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+            if (android.os.Build.VERSION.SDK_INT >= 26) {
+                if (dark) flags &= ~View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+                else flags |= View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+            }
+            decor.setSystemUiVisibility(flags);
+        }
+    }
 
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
@@ -358,6 +418,10 @@ public class LaunchFragment extends Fragment {
                             | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
                             | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
         }
+        // 启动 Web 主题同步（状态栏/导航栏跟随网页深浅色）
+        applyWebTheme();
+        themeHandler.removeCallbacks(themePoller);
+        themeHandler.postDelayed(themePoller, 1500);
     }
 
     private void exitFullscreen() {
@@ -379,11 +443,14 @@ public class LaunchFragment extends Fragment {
         } else {
             decor.setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE);
         }
+        // 停止 Web 主题轮询（退出全屏回到 App 原生界面）
+        themeHandler.removeCallbacks(themePoller);
     }
 
     @Override
     public void onDestroyView() {
         super.onDestroyView();
+        themeHandler.removeCallbacks(themePoller);
         if (c != null) c.removeStateListener(stateListener);
         // 退出 Fragment 时恢复底部导航
         if (getActivity() instanceof MainActivity) {

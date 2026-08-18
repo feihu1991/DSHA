@@ -124,7 +124,7 @@ public class TerminalFragment extends Fragment {
         String cmd = inputEdit.getText().toString().trim();
         if (cmd.isEmpty()) return;
         inputEdit.setText("");
-        appendLine("$ " + cmd);
+        // pty 模式：bash 会自行回显输入的命令，无需本地再 echo（否则重复）
         Process p = shell;
         if (p == null || !p.isAlive()) {
             appendLine("会话未运行，正在重启…");

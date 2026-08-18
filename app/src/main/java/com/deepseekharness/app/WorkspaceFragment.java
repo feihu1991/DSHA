@@ -88,32 +88,7 @@ public class WorkspaceFragment extends Fragment {
             Toast.makeText(requireContext(), "已清除环境", Toast.LENGTH_SHORT).show();
         });
 
-        backupBtn.setOnClickListener(v -> {
-            Toast.makeText(requireContext(), "正在备份，请稍候…", Toast.LENGTH_SHORT).show();
-            new Thread(() -> {
-                String path = BackupManager.backupToExternal(requireContext(), c);
-                if (getActivity() == null) return;
-                getActivity().runOnUiThread(() -> {
-                    if (path == null) {
-                        Toast.makeText(requireContext(), "备份失败：环境可能未安装", Toast.LENGTH_LONG).show();
-                        return;
-                    }
-                    new AlertDialog.Builder(requireContext())
-                            .setTitle("备份完成")
-                            .setMessage("已导出到：\n" + path)
-                            .setPositiveButton("复制路径", (d, w) -> {
-                                ClipboardManager cm = (ClipboardManager) requireContext()
-                                        .getSystemService(Context.CLIPBOARD_SERVICE);
-                                if (cm != null) {
-                                    cm.setPrimaryClip(ClipData.newPlainText("backup", path));
-                                    Toast.makeText(requireContext(), "路径已复制", Toast.LENGTH_SHORT).show();
-                                }
-                            })
-                            .setNegativeButton("好", null)
-                            .show();
-                });
-            }).start();
-        });
+        backupBtn.setOnClickListener(v -> showBackupOptions());
 
         resetBtn.setOnClickListener(v -> new AlertDialog.Builder(requireContext())
                 .setTitle("重置配置？")
@@ -138,6 +113,64 @@ public class WorkspaceFragment extends Fragment {
                 .show();
     }
 
+    /** 备份前弹出选择对话框：勾选要备份的内容 */
+    private void showBackupOptions() {
+        String[] labels = {
+                "配置与对话记录 (.dsh)",
+                "OpenCode 凭据 (auth.json)",
+                "环境与工具 (usr/etc… 避免重新下载)",
+                "工作区源码 (workdir + node_modules)",
+                "日志 (dsh-web.log)"
+        };
+        final boolean[] checked = {true, true, false, true, true};
+        new AlertDialog.Builder(requireContext())
+                .setTitle("选择备份内容")
+                .setMultiChoiceItems(labels, checked, (d, which, isChecked) ->
+                        checked[which] = isChecked)
+                .setPositiveButton("开始备份", (d, w) -> {
+                    int opts = 0;
+                    if (checked[0]) opts |= BackupManager.OPT_CONFIG;
+                    if (checked[1]) opts |= BackupManager.OPT_OPENCODE;
+                    if (checked[2]) opts |= BackupManager.OPT_ENV;
+                    if (checked[3]) opts |= BackupManager.OPT_WORKDIR;
+                    if (checked[4]) opts |= BackupManager.OPT_LOGS;
+                    if (opts == 0) {
+                        Toast.makeText(requireContext(), "至少选择一项", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    runBackup(opts);
+                })
+                .setNegativeButton("取消", null)
+                .show();
+    }
+
+    private void runBackup(int opts) {
+        Toast.makeText(requireContext(), "正在备份，请稍候…", Toast.LENGTH_SHORT).show();
+        new Thread(() -> {
+            String path = BackupManager.backupToExternal(requireContext(), c, opts);
+            if (getActivity() == null) return;
+            getActivity().runOnUiThread(() -> {
+                if (path == null) {
+                    Toast.makeText(requireContext(), "备份失败：环境可能未安装", Toast.LENGTH_LONG).show();
+                    return;
+                }
+                new AlertDialog.Builder(requireContext())
+                        .setTitle("备份完成")
+                        .setMessage("已导出到：\n" + path)
+                        .setPositiveButton("复制路径", (d2, w2) -> {
+                            ClipboardManager cm = (ClipboardManager) requireContext()
+                                    .getSystemService(Context.CLIPBOARD_SERVICE);
+                            if (cm != null) {
+                                cm.setPrimaryClip(ClipData.newPlainText("backup", path));
+                                Toast.makeText(requireContext(), "路径已复制", Toast.LENGTH_SHORT).show();
+                            }
+                        })
+                        .setNegativeButton("好", null)
+                        .show();
+            });
+        }).start();
+    }
+
     private void doRestore(Uri uri) {
         Toast.makeText(requireContext(), "正在恢复，请稍候…", Toast.LENGTH_SHORT).show();
         new Thread(() -> {
@@ -150,9 +183,10 @@ public class WorkspaceFragment extends Fragment {
                     int n;
                     while ((n = in.read(buf)) != -1) out.write(buf, 0, n);
                 }
-                // 解压到 /root（备份包内含 .dsh、.local/share/opencode、<wd>/.env、dsh-web.log）
+                // 解压到 /root（备份包可能含 .dsh、.local/share/opencode、usr 环境、<wd>、日志）
                 c.getProot().execChecked("cd /root && tar -xzf .dsha-restore.tar.gz 2>/dev/null; "
-                        + "test -d .dsh && echo OK || echo EMPTY");
+                        + "(test -d .dsh || test -d usr || test -d .local || test -d " + c.getWorkdir() + ") "
+                        + "&& echo OK || echo EMPTY");
                 //noinspection ResultOfMethodCallIgnored
                 tmp.delete();
 

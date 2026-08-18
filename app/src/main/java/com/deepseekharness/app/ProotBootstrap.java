@@ -195,6 +195,8 @@ public class ProotBootstrap {
 
     /** 启动交互式 bash 会话（持久进程，可读写 stdin/stdout；cd/export 状态保持，供内置终端使用） */
     public Process execRootfsInteractive() throws IOException {
+        // 用 util-linux script 包一层伪终端：bash 获得真实 TTY，
+        // 行编辑/方向键/历史/颜色/交互式程序(top/vim/nano)都可用。
         String[] argv = {
                 prootPath(),
                 "--link2symlink", "-L", "--kill-on-exit",
@@ -206,7 +208,8 @@ public class ProotBootstrap {
                 "-b", "/proc",
                 "-b", "/sys",
                 "-b", "/proc/self/fd:/dev/fd",
-                "/bin/bash"
+                "/bin/bash", "-c",
+                "exec script -qec /bin/bash /dev/null"
         };
         ProcessBuilder pb = new ProcessBuilder(argv).redirectErrorStream(true);
         pb.environment().put("PROOT_TMP_DIR", tmpDir.getAbsolutePath());
