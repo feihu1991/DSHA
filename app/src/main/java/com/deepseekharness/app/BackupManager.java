@@ -18,7 +18,8 @@ import java.util.Locale;
 
 /**
  * 全量备份到外部存储（Download/DSHA/）：
- * rootfs 内打包 .dsh（配置+对话记录）+ .env + 日志 → 拷贝到公共下载目录。
+ * rootfs 内打包 .dsh（配置+对话记录）+ .local/share/opencode（OpenCode 凭据）
+ * + .env + 日志 → 拷贝到公共下载目录。
  * Android 10+ 走 MediaStore（无需权限）；Android 9- 直接写公共目录。
  */
 public final class BackupManager {
@@ -29,10 +30,11 @@ public final class BackupManager {
     /** 执行备份并导出，返回外部存储中的完整路径；失败返回 null */
     public static String backupToExternal(Context ctx, HarnessController c) {
         try {
-            // 1. rootfs 内打包
+            // 1. rootfs 内打包（.dsh + OpenCode 凭据 + .env + 日志）
             String wd = c.getWorkdir();
             c.getProot().execChecked("cd /root && rm -f .dsha-backup.tar.gz && "
-                    + "tar -czf .dsha-backup.tar.gz .dsh " + wd + "/.env dsh-web.log 2>/dev/null; "
+                    + "tar -czf .dsha-backup.tar.gz .dsh .local/share/opencode "
+                    + wd + "/.env dsh-web.log 2>/dev/null; "
                     + "test -s .dsha-backup.tar.gz && echo OK || echo EMPTY");
             File tmp = new File(c.getProot().getRootfsDir(), "root/.dsha-backup.tar.gz");
             if (!tmp.isFile() || tmp.length() == 0) return null;

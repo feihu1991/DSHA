@@ -150,12 +150,51 @@ public class WorkspaceFragment extends Fragment {
                     int n;
                     while ((n = in.read(buf)) != -1) out.write(buf, 0, n);
                 }
-                // 解压到 /root（备份包内含 .dsh、<wd>/.env、dsh-web.log）
+                // 解压到 /root（备份包内含 .dsh、.local/share/opencode、<wd>/.env、dsh-web.log）
                 c.getProot().execChecked("cd /root && tar -xzf .dsha-restore.tar.gz 2>/dev/null; "
                         + "test -d .dsh && echo OK || echo EMPTY");
                 //noinspection ResultOfMethodCallIgnored
                 tmp.delete();
-                // 同步 API key：恢复的 .env 写回 App 配置，避免下次启动被覆盖
+
+                // ── 恢复后修复 ──
+
+                // 1. 修复 workspace.json（路径尾部空格 + 确保所有 session 在列表里）
+                c.getProot().execChecked(
+                    "cd /root/.dsh/storages && test -f workspace.json && "
+                    + "sed -i 's|\"/root/[a-z]* \"|\"/root/workspace\"|g; s|\"title\": \"[a-z]* \"|\"title\": \"workspace\"|g' workspace.json 2>/dev/null; "
+                    + "python3 -c '\n"
+                    + "import json,os,glob\n"
+                    + "p=\"/root/.dsh/storages/workspace.json\"\n"
+                    + "try:\n"
+                    + "  d=json.load(open(p))\n"
+                    + "  ws=list(d[\"tables\"][\"workspaces\"].values())[0]\n"
+                    + "  ws[\"path\"]=ws[\"path\"].rstrip()\n"
+                    + "  ws[\"title\"]=ws[\"title\"].rstrip()\n"
+                    + "  existing=set(ws[\"sessionIds\"])\n"
+                    + "  sess_dir=\"/root/.dsh/sessions\"\n"
+                    + "  ws_dir=ws[\"path\"].replace(\"/root/\",\"\")\n"
+                    + "  ws_dir_enc=\"--\"+ws_dir.replace(\" \",\"~0020\")+\"--\"\n"
+                    + "  full=os.path.join(sess_dir, ws_dir_enc)\n"
+                    + "  if os.path.isdir(full):\n"
+                    + "    for s in os.listdir(full):\n"
+                    + "      if s.startswith(\"session-\") and s not in existing:\n"
+                    + "        ws[\"sessionIds\"].append(s)\n"
+                    + "  d[\"global\"][\"archivedSessionIds\"]=[]\n"
+                    + "  json.dump(d, open(p,\"w\"), indent=2)\n"
+                    + "except: pass\n"
+                    + "' 2>/dev/null; echo FIX_DONE");
+
+                // 2. 重建 auth.json（从 .dsh/.credentials.yaml 读 OpenCode key 写入标准路径）
+                c.getProot().execChecked(
+                    "KEY=$(grep -oE '^OPENCODE_GO_API_KEY:[[:space:]]*.+$' /root/.dsh/.credentials.yaml "
+                    + " | sed -E 's/^OPENCODE_GO_API_KEY:[[:space:]]*//; s/[[:space:]]+$//'); "
+                    + "if [ -n \"$KEY\" ]; then "
+                    + "  mkdir -p /root/.local/share/opencode && "
+                    + "  echo \"{\\\"opencode-go\\\":{\\\"type\\\":\\\"apikey\\\",\\\"key\\\":\\\"$KEY\\\"}}\" "
+                    + "    > /root/.local/share/opencode/auth.json && echo AUTH_OK; "
+                    + "fi");
+
+                // 3. 同步所有 API key 到 App 配置（不仅 DEEPSEEK_API_KEY）
                 String env = c.getProot().execAndRead(
                         "cat /root/" + c.getWorkdir() + "/.env 2>/dev/null");
                 if (env != null) {
@@ -163,13 +202,12 @@ public class WorkspaceFragment extends Fragment {
                         if (line.startsWith("DEEPSEEK_API_KEY=")) {
                             String key = line.substring("DEEPSEEK_API_KEY=".length()).trim();
                             if (!key.isEmpty()) c.setApiKey(key);
-                            break;
                         }
                     }
                 }
                 if (getActivity() == null) return;
                 getActivity().runOnUiThread(() ->
-                        Toast.makeText(requireContext(), "恢复完成（API key 已同步）",
+                        Toast.makeText(requireContext(), "恢复完成（配置+凭据+对话 已全部恢复）",
                                 Toast.LENGTH_LONG).show());
             } catch (Exception e) {
                 if (getActivity() != null) {
