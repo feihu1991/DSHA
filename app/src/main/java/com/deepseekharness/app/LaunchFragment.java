@@ -101,30 +101,50 @@ public class LaunchFragment extends Fragment {
             wv.getSettings().setUserAgentString("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
                     "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36");
         }
-        // 键盘弹出时自动调整布局（配合 manifest 的 adjustResize）
+        // 键盘弹出时自动调整布局（配合 manifest 的 adjustResize）。
+        // 注意：adjustResize 与 adjustPan 互斥，manifest 只保留 adjustResize，
+        // 这里再在运行时强制一次（防止其他代码覆盖窗口模式）。
+        android.app.Activity act = getActivity();
+        if (act != null) {
+            try {
+                act.getWindow().setSoftInputMode(
+                        android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
+            } catch (Throwable ignored) {
+            }
+        }
         wv.setLayoutParams(new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         wv.setWebViewClient(new WebViewClient());
         // 键盘弹出时，通过 WindowInsets 调整 WebView 底部留白，确保输入框可见。
+        // 先请求 insets 分发（嵌套视图默认不一定会收到）。
+        wv.requestApplyInsets();
         wv.setOnApplyWindowInsetsListener((v, insets) -> {
+            int ime = 0;
             if (android.os.Build.VERSION.SDK_INT >= 30) {
                 // API 30+：键盘/IME 的 inset 在 ime() 中
-                int ime = insets.getInsets(android.view.WindowInsets.Type.ime()).bottom;
-                if (ime > 0) {
-                    v.setPadding(0, 0, 0, ime);
-                } else {
-                    v.setPadding(0, 0, 0, 0);
-                }
+                ime = insets.getInsets(android.view.WindowInsets.Type.ime()).bottom;
             } else {
                 // API 26-29：用 systemWindowInsetBottom 近似（含键盘）
-                int bottom = insets.getSystemWindowInsetBottom();
-                if (bottom > 0) {
-                    v.setPadding(0, 0, 0, bottom);
-                } else {
-                    v.setPadding(0, 0, 0, 0);
-                }
+                ime = insets.getSystemWindowInsetBottom();
             }
-            return insets;
+            if (ime > 0) {
+                v.setPadding(0, 0, 0, ime);
+            } else {
+                v.setPadding(0, 0, 0, 0);
+            }
+            // 消费 IME inset，避免 WebView 内部再按键盘高度做一次滚动/缩放，
+            // 导致页面内容双重偏移。其余 insets 继续向下传播。
+            if (android.os.Build.VERSION.SDK_INT >= 30) {
+                return insets.consume(android.view.WindowInsets.Type.ime());
+            }
+            return insets.consumeSystemWindowInsets();
+        });
+        // 兜底：adjustResize 真正生效时窗口会缩小、WebView 高度会变化，
+        // 此时页面视口已自然缩小，把手动 padding 清零，避免与新视口叠加。
+        wv.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
+            if (b - t != ob - ot && v.getPaddingBottom() > 0) {
+                v.setPadding(0, 0, 0, 0);
+            }
         });
     }
 
