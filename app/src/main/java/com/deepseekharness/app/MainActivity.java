@@ -225,7 +225,10 @@ public class MainActivity extends AppCompatActivity {
     private void startBackup() {
         Toast.makeText(this, "正在备份，请稍候…", Toast.LENGTH_SHORT).show();
         new Thread(() -> {
-            String path = BackupManager.backupToExternal(this, HarnessController.get(this));
+            // 提醒弹窗入口：默认全量（配置+凭据+环境+工作区+日志）
+            int all = BackupManager.OPT_CONFIG | BackupManager.OPT_OPENCODE
+                    | BackupManager.OPT_ENV | BackupManager.OPT_WORKDIR | BackupManager.OPT_LOGS;
+            String path = BackupManager.backupToExternal(this, HarnessController.get(this), all);
             runOnUiThread(() -> {
                 if (path == null) {
                     Toast.makeText(this, "备份失败：环境可能未安装或空间不足", Toast.LENGTH_LONG).show();
