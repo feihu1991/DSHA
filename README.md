@@ -49,16 +49,13 @@ cp -r agent-skills/screen-ocr-operator ~/.agents/skills/
 公开仓库用 GitHub Actions 免费构建（**不需要电脑、不需要 Termux**）：
 
 1. 推送到 `main`（或在 Actions 页点 Run workflow）
-2. 流水线分两段：
-   - `ubuntu-24.04-arm`：原生 arm64 chroot 预装 Ubuntu + Node + dsh RC6
-   - `ubuntu-latest`：把离线包打进 APK
-3. 在 Actions 的 Artifacts 下载 `dsha-debug-apk`
+2. 流水线单段 `ubuntu-latest`：JDK 17 + Android SDK + Gradle 8.5 → `assembleDebug`
+3. 在 Actions 的 Artifacts 下载 APK（推 main 分支会自动发布 GitHub Release）
 
 本地：
 
 ```sh
 ./build.sh   # 需要 Gradle 8.5 + Android SDK + JDK 17
-# 还需要先有 app/src/main/assets/offline-rootfs.tar.gz
 ```
 
 ## 🧱 技术架构

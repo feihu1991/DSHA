@@ -2,32 +2,6 @@ plugins {
     id 'com.android.application'
 }
 
-def offlineGz = file("src/main/assets/offline-rootfs.tar.gz")
-def offlineBin = file("src/main/assets/offline-rootfs.bin")
-if (!offlineGz.exists() && !offlineBin.exists()) {
-    throw new GradleException(
-        "缺少内置离线环境包 app/src/main/assets/offline-rootfs.tar.gz ——\n" +
-        "它由 GitHub Actions 在 ubuntu-24.04-arm 上 chroot 预装生成。\n" +
-        "本地构建请从 Actions 的 offline-rootfs-bundle 产物拷到该路径。")
-}
-
-// aapt 会把 .tar.gz 自动解压成 .tar。打进 APK 前改名为 .bin。
-tasks.register("protectOfflineBundle") {
-    doLast {
-        if (offlineGz.exists()) {
-            offlineBin.delete()
-            if (!offlineGz.renameTo(offlineBin)) {
-                throw new GradleException("无法把 offline-rootfs.tar.gz 改名为 .bin")
-            }
-        }
-    }
-}
-tasks.configureEach { t ->
-    if (t.name == "preBuild" || t.name == "preDebugBuild") {
-        t.dependsOn("protectOfflineBundle")
-    }
-}
-
 android {
     namespace 'com.deepseekharness.app'
     compileSdk 34
@@ -36,8 +10,8 @@ android {
         applicationId "com.dsh.client"
         minSdk 26
         targetSdk 34
-        versionCode 18
-        versionName "1.1.2"
+        versionCode 21
+        versionName "1.4.2"
         ndk {
             abiFilters 'arm64-v8a'
         }
@@ -118,7 +92,7 @@ afterEvaluate {
                 if (e.name.startsWith("lib/") && e.name.endsWith(".so")) {
                     libs << e.name
                 }
-                if (e.name.contains("offline") || e.name.contains("rootfs") || e.name.startsWith("assets/")) {
+                if (e.name.startsWith("assets/")) {
                     assets << (e.name + " size=" + e.size)
                 }
             }
@@ -127,12 +101,6 @@ afterEvaluate {
             libs.each { println "  " + it }
             println "===== APK assets ====="
             assets.each { println "  " + it }
-            def hasBundle = assets.any {
-                it.contains("offline-rootfs") || it.contains("rootfs.tar") || it.contains("offline_rootfs")
-            }
-            if (!hasBundle) {
-                throw new GradleException("APK 里没有 offline-rootfs。assets: " + assets)
-            }
             if (libs.isEmpty()) {
                 throw new GradleException("APK 里没有 lib/*.so")
             }

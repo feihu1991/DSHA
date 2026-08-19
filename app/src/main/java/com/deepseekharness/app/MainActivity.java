@@ -57,15 +57,6 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        if (!getIntent().getBooleanExtra("skip_extract", false)) {
-            ProotBootstrap proot = new ProotBootstrap(this);
-            if (!proot.isOfflineExtracted()) {
-                startActivity(new Intent(this, ExtractActivity.class));
-                finish();
-                return;
-            }
-        }
-
         setContentView(R.layout.activity_main);
 
         // 不再强制全屏：保留状态栏，避免状态栏变黑/被遮挡；状态栏图标深浅跟随日夜主题。
