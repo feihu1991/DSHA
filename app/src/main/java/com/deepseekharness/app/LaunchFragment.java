@@ -48,6 +48,124 @@ public class LaunchFragment extends Fragment {
     private boolean polling = false;
     private boolean previewBusy = false;
 
+    // Web 主题同步：网页(DSH 设置)切深/浅色时，状态栏/导航栏/窗口背景跟随
+    private final Handler themeHandler = new Handler(Looper.getMainLooper());
+    private final Runnable themePoller = new Runnable() {
+        @Override
+        public void run() {
+            applyWebTheme();
+            themeHandler.postDelayed(this, 1500);
+        }
+    };
+
+    /** 读取网页当前主题(DSH ui-theme)，同步系统栏。
+     *  JS 侧把 --dsw-alias-bg-base 解析成 #rrggbb（getPropertyValue 拿到的只是未展开的
+     *  var() 引用，Android 的 Color.parseColor 无法解析）；dark 取 html 内联 colorScheme，
+     *  未明确设置时跟随 prefers-color-scheme，作为解析失败时的兜底。 */
+    private void applyWebTheme() {
+        WebView wv = webView;
+        if (wv == null || getActivity() == null) return;
+        try {
+            wv.evaluateJavascript(
+                    "(function(){" +
+                    "var scheme=document.documentElement.style.colorScheme||'';" +
+                    "var sysDark=typeof matchMedia!=='undefined'&&matchMedia('(prefers-color-scheme: dark)').matches;" +
+                    "var dark=scheme==='dark'||(scheme!=='light'&&!!sysDark);" +
+                    "var bg='';" +
+                    "try{var p=document.createElement('div');p.style.backgroundColor='var(--dsw-alias-bg-base)';" +
+                    "document.documentElement.appendChild(p);" +
+                    "var c=getComputedStyle(p).backgroundColor;p.remove();" +
+                    "var m=c.match(/(\\d+)[^\\d]*(\\d+)[^\\d]*(\\d+)/);" +
+                    "if(m&&!c.match(/rgba?\\(0,\\s*0,\\s*0,\\s*0\\)/)){" +
+                    "bg='#'+[+m[1],+m[2],+m[3]].map(function(v){return('0'+v.toString(16)).slice(-2)}).join('');}" +
+                    "}catch(e){}" +
+                    "return JSON.stringify({dark:dark,bg:bg});})()",
+                    value -> {
+                        if (getActivity() == null || value == null || value.length() < 3) return;
+                        String v = value.trim();
+                        if (v.startsWith("\"") || v.startsWith("\'")) return; // 页面未就绪时返回字符串
+                        try {
+                            org.json.JSONObject j = new org.json.JSONObject(v);
+                            boolean dark = j.optBoolean("dark", false);
+                            String bg = j.optString("bg", "");
+                            applySystemBarTheme(dark, bg);
+                        } catch (Exception ignored) {
+                        }
+                    });
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 应用主题到系统栏：状态栏/导航栏背景色 + 图标深浅。
+     *  背景色能解析时按背景亮度决定图标颜色（页面主题切换后 style.colorScheme 可能过期），
+     *  解析失败才退回 colorScheme 判断。 */
+    private void applySystemBarTheme(boolean dark, String bg) {
+        android.app.Activity act = getActivity();
+        if (act == null) return;
+        int bgColor;
+        if (bg != null && bg.length() == 7) {
+            try {
+                bgColor = android.graphics.Color.parseColor(bg);
+                dark = !isLightColor(bgColor);
+            } catch (Exception e) {
+                bgColor = dark ? 0xFF0F1115 : 0xFFFFFFFF;
+            }
+        } else {
+            bgColor = dark ? 0xFF0F1115 : 0xFFFFFFFF;
+        }
+        act.getWindow().setStatusBarColor(bgColor);
+        act.getWindow().setNavigationBarColor(bgColor);
+        setSystemBarsAppearance(dark);
+    }
+
+    /** 按亮度判断颜色是否属于浅色（用于决定状态栏图标用深色还是浅色） */
+    private boolean isLightColor(int color) {
+        int r = (color >> 16) & 0xFF;
+        int g = (color >> 8) & 0xFF;
+        int b = color & 0xFF;
+        return (299 * r + 587 * g + 114 * b) / 1000 >= 128;
+    }
+
+    /** 设置状态栏/导航栏图标深浅：
+     *  Android 11+ 用 WindowInsetsController（setSystemUiVisibility 的 LIGHT_* 标志已废弃、
+     *  在部分系统上不生效）；旧版本用传统标志。 */
+    private void setSystemBarsAppearance(boolean dark) {
+        android.app.Activity act = getActivity();
+        if (act == null) return;
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            android.view.WindowInsetsController c = act.getWindow().getInsetsController();
+            if (c != null) {
+                int light = android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
+                        | android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS;
+                c.setSystemBarsAppearance(dark ? 0 : light, light);
+            }
+        } else {
+            View decor = act.getWindow().getDecorView();
+            int flags = decor.getSystemUiVisibility();
+            if (dark) {
+                flags &= ~(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+                        | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
+            } else {
+                flags |= View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+                        | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+            }
+            decor.setSystemUiVisibility(flags);
+        }
+    }
+
+    /** 退出预览后按 App 自身主题恢复系统栏（透明背景 + 图标深浅跟随主题），
+     *  避免残留网页主题导致日间白字白底 / 夜间深字深底。 */
+    private void applyAppThemeSystemBars() {
+        android.app.Activity act = getActivity();
+        if (act == null) return;
+        act.getWindow().setStatusBarColor(android.graphics.Color.TRANSPARENT);
+        act.getWindow().setNavigationBarColor(android.graphics.Color.TRANSPARENT);
+        boolean dark = (getResources().getConfiguration().uiMode
+                & android.content.res.Configuration.UI_MODE_NIGHT_MASK)
+                == android.content.res.Configuration.UI_MODE_NIGHT_YES;
+        setSystemBarsAppearance(dark);
+    }
+
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     /** 记录上次加载时 web 进程代际，检测到 web 重启则刷新预览；硬重启则重建会话 */
     private long lastWebEpoch = -1;
@@ -248,6 +366,8 @@ public class LaunchFragment extends Fragment {
         controls = view.findViewById(R.id.launch_controls);
 
         initPreview();
+        // 进入本页时确保系统栏跟随 App 当前主题（清除上一次预览可能残留的网页主题设置）
+        applyAppThemeSystemBars();
         // 未启动 WebUI 时隐藏空预览容器，避免首次进入即白屏
         if (previewContainer != null) previewContainer.setVisibility(View.GONE);
         // 自动后台预启动：进入启动页后 1.5s 静默拉起 web（环境就绪且用户未手动停止时）→ 点启动秒开
@@ -411,17 +531,32 @@ public class LaunchFragment extends Fragment {
         if (getActivity() instanceof MainActivity) {
             ((MainActivity) getActivity()).setBottomNavVisible(false);
         }
-        View decor = getActivity() != null ? getActivity().getWindow().getDecorView() : null;
-        if (decor != null) {
+        android.app.Activity act = getActivity();
+        if (act == null) return;
+        View decor = act.getWindow().getDecorView();
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            // Android 11+：使用 WindowInsetsController 隐藏导航栏，但保留状态栏
+            // （避免状态栏变黑/被遮挡）。
+            android.view.WindowInsetsController c = act.getWindow().getInsetsController();
+            if (c != null) {
+                c.hide(android.view.WindowInsets.Type.navigationBars());
+                c.setSystemBarsBehavior(
+                        android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+            }
+        } else {
+            // Android 10-：隐藏导航栏但保留状态栏；保留原有图标深浅标志，
+            // 避免 setSystemUiVisibility 覆盖掉 LIGHT_STATUS_BAR 造成日间白字白底
             decor.setSystemUiVisibility(
                     View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                            | View.SYSTEM_UI_FLAG_FULLSCREEN
                             | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                            | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                            | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-                            | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
-            decor.setBackgroundColor(android.graphics.Color.BLACK);
+                            | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                            | (decor.getSystemUiVisibility() & (View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+                                    | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR)));
         }
+        // 启动 Web 主题同步（状态栏/导航栏跟随网页深浅色）
+        applyWebTheme();
+        themeHandler.removeCallbacks(themePoller);
+        themeHandler.postDelayed(themePoller, 1500);
     }
 
     private void exitFullscreen() {
@@ -432,11 +567,29 @@ public class LaunchFragment extends Fragment {
         if (getActivity() instanceof MainActivity) {
             ((MainActivity) getActivity()).setBottomNavVisible(true);
         }
+        android.app.Activity act = getActivity();
+        if (act == null) return;
+        View decor = act.getWindow().getDecorView();
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            android.view.WindowInsetsController c = act.getWindow().getInsetsController();
+            if (c != null) {
+                c.show(android.view.WindowInsets.Type.navigationBars());
+            }
+        } else {
+            // 恢复系统 UI 可见；图标深浅交给 applyAppThemeSystemBars() 按主题重设
+            decor.setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE);
+        }
+        // 系统栏恢复 App 自身主题（透明背景 + 图标深浅跟随主题），
+        // 避免残留网页主题设置（如日间白底浅色图标）导致状态栏看不清
+        applyAppThemeSystemBars();
+        // 停止 Web 主题轮询（退出全屏回到 App 原生界面）
+        themeHandler.removeCallbacks(themePoller);
     }
 
     @Override
     public void onDestroyView() {
         super.onDestroyView();
+        themeHandler.removeCallbacks(themePoller);
         if (c != null) c.removeStateListener(stateListener);
         if (getActivity() instanceof MainActivity) {
             ((MainActivity) getActivity()).setBottomNavVisible(true);

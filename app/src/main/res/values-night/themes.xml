@@ -3,13 +3,12 @@
     <style name="Theme.DeepseekHarness" parent="Theme.Material3.DayNight.NoActionBar">
         <item name="colorPrimary">@color/primary</item>
         <item name="colorOnPrimary">@android:color/white</item>
-        <item name="colorPrimaryContainer">#E3E8FF</item>
+        <item name="colorPrimaryContainer">#1F2733</item>
         <item name="colorSecondary">@color/primary_dark</item>
-        <!-- 状态栏/导航栏透明，跟随窗口背景；日间模式用深色图标（否则白字白底看不清） -->
+        <!-- 深色模式状态栏透明，应用背景色会让状态栏区域自然显示；图标用浅色 -->
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
-        <item name="android:windowLightStatusBar" tools:targetApi="m">true</item>
-        <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">true</item>
+        <item name="android:windowLightStatusBar">false</item>
         <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="o_mr1">shortEdges</item>
     </style>
 </resources>
