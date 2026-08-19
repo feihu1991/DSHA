@@ -5,7 +5,7 @@
         <item name="colorOnPrimary">@android:color/white</item>
         <item name="colorPrimaryContainer">#1F2733</item>
         <item name="colorSecondary">@color/primary_dark</item>
-        <!-- 深色模式状态栏透明，应用背景色会让状态栏区域自然显示 -->
+        <!-- 深色模式状态栏透明，应用背景色会让状态栏区域自然显示；图标用浅色 -->
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowLightStatusBar">false</item>

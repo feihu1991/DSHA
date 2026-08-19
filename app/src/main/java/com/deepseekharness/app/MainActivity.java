@@ -57,38 +57,52 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
+        if (!getIntent().getBooleanExtra("skip_extract", false)) {
+            ProotBootstrap proot = new ProotBootstrap(this);
+            if (!proot.isOfflineExtracted()) {
+                startActivity(new Intent(this, ExtractActivity.class));
+                finish();
+                return;
+            }
+        }
+
         setContentView(R.layout.activity_main);
 
-        // 不再强制全屏：保留状态栏，避免状态栏变黑/遮挡。
+        // 不再强制全屏：保留状态栏，避免状态栏变黑/被遮挡；状态栏图标深浅跟随日夜主题。
         // 全屏预览由 LaunchFragment.enterFullscreen() 动态控制。
         requestPermissions();
         requestBatteryOptimization();
         maybeShowBackupReminder();
         maybeCheckUpdate();
+        // 拉起设备桥服务（普通后台服务，无 FGS 崩溃风险）：
+        // 3090 桥 + Shizuku + ADB 预热 + 配对弹窗监听/通知输码配对
+        ensureDeviceBridge();
 
         BottomNavigationView nav = findViewById(R.id.bottom_nav);
 
         if (savedInstanceState == null) {
-            switchFragment(new InstallFragment());
+            switchFragment(new LaunchFragment());
         }
 
         nav.setOnItemSelectedListener(item -> {
             int id = item.getItemId();
             Fragment f;
-            if (id == R.id.nav_install) {
-                f = new InstallFragment();
-            } else if (id == R.id.nav_launch) {
+            if (id == R.id.nav_launch) {
                 f = new LaunchFragment();
+            } else if (id == R.id.nav_install) {
+                f = new InstallFragment();
             } else if (id == R.id.nav_config) {
                 f = new ConfigFragment();
-            } else if (id == R.id.nav_terminal) {
-                f = new TerminalFragment();
+            } else if (id == R.id.nav_plugins) {
+                f = new PluginFragment();
             } else {
-                f = new WorkspaceFragment();
+                f = new TerminalFragment();
             }
             switchFragment(f);
             return true;
         });
+        // 首页 = 启动页（与内测版一致）
+        nav.setSelectedItemId(R.id.nav_launch);
     }
 
     private void switchFragment(Fragment f) {
@@ -109,6 +123,18 @@ public class MainActivity extends AppCompatActivity {
                 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
                 != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 100);
+        }
+    }
+
+    /** 拉起设备桥服务（普通后台服务，不 startForeground → 永不触发 FGS 杀进程崩溃） */
+    private void ensureDeviceBridge() {
+        if (isFinishing() || isDestroyed()) return;
+        if (DeviceBridgeService.isRunning()) return;
+        try {
+            startService(new Intent(this, DeviceBridgeService.class));
+            android.util.Log.i("DSHA", "device bridge started");
+        } catch (Throwable e) {
+            android.util.Log.e("DSHA", "start device bridge failed: " + e, e);
         }
     }
 
@@ -217,10 +243,7 @@ public class MainActivity extends AppCompatActivity {
     private void startBackup() {
         Toast.makeText(this, "正在备份，请稍候…", Toast.LENGTH_SHORT).show();
         new Thread(() -> {
-            // 提醒弹窗入口：默认全量（配置+凭据+环境+工作区+日志）
-            int all = BackupManager.OPT_CONFIG | BackupManager.OPT_OPENCODE
-                    | BackupManager.OPT_ENV | BackupManager.OPT_WORKDIR | BackupManager.OPT_LOGS;
-            String path = BackupManager.backupToExternal(this, HarnessController.get(this), all);
+            String path = BackupManager.backupToExternal(this, HarnessController.get(this));
             runOnUiThread(() -> {
                 if (path == null) {
                     Toast.makeText(this, "备份失败：环境可能未安装或空间不足", Toast.LENGTH_LONG).show();
@@ -240,11 +263,5 @@ public class MainActivity extends AppCompatActivity {
                         .show();
             });
         }).start();
-    }
-
-    @Override
-    public void onWindowFocusChanged(boolean hasFocus) {
-        super.onWindowFocusChanged(hasFocus);
-        // 不再强制全屏 — 状态栏保持可见
     }
 }

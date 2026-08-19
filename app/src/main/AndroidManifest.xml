@@ -24,12 +24,9 @@
         android:usesCleartextTraffic="true"
         android:theme="@style/Theme.DeepseekHarness">
 
-        <!-- 注意：configChanges 不能包含 uiMode —— 否则系统切换日夜模式时 Activity 不重建，
-             AppCompat DayNight 主题不会跟随（外框永远停留在白色日间主题）。 -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|keyboard"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -42,13 +39,42 @@
             android:exported="false"
             android:theme="@style/Theme.DeepseekHarness" />
 
+        <activity
+            android:name=".ExtractActivity"
+            android:exported="false"
+            android:theme="@style/Theme.DeepseekHarness" />
+
+        <activity
+            android:name=".AdbPairActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:label="ADB 无线配对"
+            android:theme="@style/Theme.AppCompat.Dialog" />
+
         <service
             android:name=".HarnessService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
+        <!-- 关键修复：Shizuku UserService 必须注册，否则 bindUserService 永久失败 -->
+        <service
+            android:name=".ShellService"
+            android:exported="false"
+            android:process=":shizuku"
+            android:permission="moe.shizuku.manager.permission.API_V23" />
+
+        <!-- 设备桥服务（普通后台服务）：3090 桥 + ADB 预热 + 配对弹窗监听 -->
+        <service
+            android:name=".DeviceBridgeService"
+            android:exported="false" />
+
         <receiver
             android:name=".ConfirmReceiver"
+            android:exported="false" />
+
+        <!-- 通知卡片就地输入配对码（RemoteInput） -->
+        <receiver
+            android:name=".AdbPairReceiver"
             android:exported="false" />
 
         <provider
