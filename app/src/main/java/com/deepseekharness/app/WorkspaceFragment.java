@@ -187,10 +187,30 @@ public class WorkspaceFragment extends Fragment {
                     int n;
                     while ((n = in.read(buf)) != -1) out.write(buf, 0, n);
                 }
-                // 解压到根目录（备份包成员是相对根路径：root/.dsh、root/...、usr、etc 等）
-                c.getProot().execChecked("cd / && tar -xzf /root/.dsha-restore.tar.gz 2>/dev/null; "
-                        + "(test -d /root/.dsh || test -d /usr || test -d /root/.local) "
-                        + "&& echo OK || echo EMPTY");
+                // 解压（自动识别备份包格式）：
+                //   v1.4+ 新格式：成员相对根路径（root/.dsh、usr、etc…），在 / 下解压；
+                //   v1.1 及更早旧格式：成员相对 /root（.dsh、<wd>/.env、dsh-web.log），在 /root 下解压。
+                // 若不识别旧格式，会把 .dsh 解到 /.dsh（错误位置），表现为“恢复成功但什么都没恢复”。
+                // 解压后按备份包实际成员逐一校验落位，避免再出现静默失败。
+                String out = c.getProot().execChecked(
+                        "LIST=$(tar -tzf /root/.dsha-restore.tar.gz 2>/dev/null | grep -v '/$'); "
+                        + "if [ -z \"$LIST\" ]; then echo \"EMPTY:unreadable\"; "
+                        + "else "
+                        + "if echo \"$LIST\" | grep -qE '^(root/|usr/|etc/|opt/|sbin/|bin/|lib/|lib64/|var/)'; then "
+                        + "tar -xzf /root/.dsha-restore.tar.gz -C / 2>/dev/null; P=''; "
+                        + "else "
+                        + "mkdir -p /root && tar -xzf /root/.dsha-restore.tar.gz -C /root 2>/dev/null; P=/root; "
+                        + "fi; "
+                        + "FAIL=''; "
+                        + "for d in $(echo \"$LIST\" | awk -F/ 'NF>0{print $1}' | sort -u); do "
+                        + "[ -e \"$P/$d\" ] || FAIL=\"$FAIL $d\"; "
+                        + "done; "
+                        + "[ -z \"$FAIL\" ] && echo OK || echo \"EMPTY:$FAIL\"; "
+                        + "fi");
+                if (out == null || !out.trim().endsWith("OK")) {
+                    throw new IOException("备份文件解压后未找到有效内容（文件可能损坏，"
+                            + "或不是 DSHA 备份，或备份版本过旧无法识别）");
+                }
                 //noinspection ResultOfMethodCallIgnored
                 tmp.delete();
 
