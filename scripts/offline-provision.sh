@@ -8,10 +8,10 @@
 set -euo pipefail
 
 ARCHIVE="${DSH_RUNTIME_ARCHIVE:-/root/dsh-runtime.tar.gz}"
-EXPECTED_RUNTIME_ID="dsh-v0.1.2-alpha.2"
-EXPECTED_DSH_VERSION="0.1.2-alpha.2"
-EXPECTED_TAG="dsh-v0.1.2-alpha.2"
-EXPECTED_COMMIT="0a53fb55bea101816fa226bb964ae2bed71c343b"
+EXPECTED_RUNTIME_ID="dsh-v0.1.5-rc.1"
+EXPECTED_DSH_VERSION="0.1.5-rc.1"
+EXPECTED_TAG="dsh-v0.1.5-rc.1"
+EXPECTED_COMMIT="183f08e9c6dde7e36cd2318eaee70b0da08fb35e"
 
 die() { echo "ERROR: $*" >&2; exit 1; }
 
@@ -43,10 +43,10 @@ const fs = require('node:fs')
 const path = process.argv[2]
 const meta = JSON.parse(fs.readFileSync(path, 'utf8'))
 const expected = {
-  runtimeId: 'dsh-v0.1.2-alpha.2',
-  dshVersion: '0.1.2-alpha.2',
-  upstreamTag: 'dsh-v0.1.2-alpha.2',
-  upstreamCommit: '0a53fb55bea101816fa226bb964ae2bed71c343b',
+  runtimeId: 'dsh-v0.1.5-rc.1',
+  dshVersion: '0.1.5-rc.1',
+  upstreamTag: 'dsh-v0.1.5-rc.1',
+  upstreamCommit: '183f08e9c6dde7e36cd2318eaee70b0da08fb35e',
 }
 const bad = Object.keys(expected).filter(key => meta[key] !== expected[key])
 if (bad.length) throw new Error(`runtime metadata mismatch: ${bad.join(', ')}`)

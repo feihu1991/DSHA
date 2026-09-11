@@ -7,9 +7,9 @@
 # consumed by ci-make-offline-bundle.sh as DSH_RUNTIME_ARCHIVE.
 set -euo pipefail
 
-DSH_VERSION="0.1.2-alpha.2"
-DSH_TAG="dsh-v0.1.2-alpha.2"
-DSH_COMMIT="0a53fb55bea101816fa226bb964ae2bed71c343b"
+DSH_VERSION="0.1.5-rc.1"
+DSH_TAG="dsh-v0.1.5-rc.1"
+DSH_COMMIT="183f08e9c6dde7e36cd2318eaee70b0da08fb35e"
 UPSTREAM_DIR="${DSH_UPSTREAM_DIR:-}"
 OUT="${OUT:-$PWD/dsh-alpha-runtime-${DSH_VERSION}-linux-arm64.tar.gz}"
 PNPM_BIN="${PNPM_BIN:-pnpm}"
@@ -192,10 +192,10 @@ for (const dir of dirs) {
 }
 writeFileSync(out, `${JSON.stringify({
   formatVersion: 1,
-  runtimeId: 'dsh-v0.1.2-alpha.2',
-  dshVersion: '0.1.2-alpha.2',
-  upstreamTag: 'dsh-v0.1.2-alpha.2',
-  upstreamCommit: '0a53fb55bea101816fa226bb964ae2bed71c343b',
+  runtimeId: 'dsh-v0.1.5-rc.1',
+  dshVersion: '0.1.5-rc.1',
+  upstreamTag: 'dsh-v0.1.5-rc.1',
+  upstreamCommit: '183f08e9c6dde7e36cd2318eaee70b0da08fb35e',
   packedArtifacts: packed,
   consumerLockSha256: createHash('sha256').update(
     readFileSync(join(dirname(out), 'consumer-package-lock.json'))

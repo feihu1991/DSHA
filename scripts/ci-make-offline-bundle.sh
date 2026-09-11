@@ -133,7 +133,7 @@ tar -xOf "$OUT" ./usr/local/share/dsha-dsh-runtime.json >"$meta_tmp" 2>/dev/null
 "$ROOTFS_DIR/usr/local/bin/node" - "$meta_tmp" <<'NODE'
 const fs = require('node:fs')
 const meta = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'))
-const expected = { runtimeId: 'dsh-v0.1.2-alpha.2', dshVersion: '0.1.2-alpha.2', upstreamTag: 'dsh-v0.1.2-alpha.2', upstreamCommit: '0a53fb55bea101816fa226bb964ae2bed71c343b' }
+const expected = { runtimeId: 'dsh-v0.1.5-rc.1', dshVersion: '0.1.5-rc.1', upstreamTag: 'dsh-v0.1.5-rc.1', upstreamCommit: '183f08e9c6dde7e36cd2318eaee70b0da08fb35e' }
 const bad = Object.keys(expected).filter(key => meta[key] !== expected[key])
 if (bad.length) throw new Error(`offline rootfs runtime metadata mismatch: ${bad.join(', ')}`)
 NODE
